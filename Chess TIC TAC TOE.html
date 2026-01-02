@@ -1797,7 +1797,260 @@
         const playbackBtn = document.getElementById('playback-btn');
         if (playbackBtn) {
             if (isPlayingBack) {
-                playbackBtn.innerHTML = '\u23f8 Stop';\n                playbackBtn.classList.add('playing');\n            } else {\n                playbackBtn.innerHTML = '\u25b6 Play';\n                playbackBtn.classList.remove('playing');\n            }\n        }\n    }\n\n    window.closeWinScreen = () => {\n        document.getElementById('win-screen').classList.add('hidden');\n        document.getElementById('game-screen').classList.remove('hidden');\n        \n        // Show game over controls\n        showGameOverControls();\n        \n        // Go to end of history to show final state\n        historyGoToEnd();\n    };\n\n    function showGameOverControls() {\n        const gameOverControls = document.getElementById('game-over-controls');\n        const quitBtn = document.getElementById('quit-btn');\n        if (gameOverControls) gameOverControls.classList.add('visible');\n        if (quitBtn) quitBtn.style.display = 'none';\n    }\n\n    function hideGameOverControls() {\n        const gameOverControls = document.getElementById('game-over-controls');\n        const quitBtn = document.getElementById('quit-btn');\n        if (gameOverControls) gameOverControls.classList.remove('visible');\n        if (quitBtn) quitBtn.style.display = 'block';\n    }\n\n    // Animated Playback\n    window.togglePlayback = () => {\n        if (isPlayingBack) {\n            stopPlayback();\n        } else {\n            startPlayback();\n        }\n    };\n\n    function startPlayback() {\n        if (moveHistory.length <= 1) return;\n        \n        isPlayingBack = true;\n        \n        // Start from beginning if at end\n        if (historyIndex >= moveHistory.length - 1) {\n            historyIndex = 0;\n            displayHistoryState();\n        }\n        \n        updateHistoryButtons();\n        \n        playbackInterval = setInterval(() => {\n            if (historyIndex < moveHistory.length - 1) {\n                animateToNextMove();\n            } else {\n                stopPlayback();\n            }\n        }, 800);\n    }\n\n    function stopPlayback() {\n        isPlayingBack = false;\n        if (playbackInterval) {\n            clearInterval(playbackInterval);\n            playbackInterval = null;\n        }\n        updateHistoryButtons();\n    }\n\n    function animateToNextMove() {\n        if (historyIndex >= moveHistory.length - 1) return;\n        \n        const prevState = moveHistory[historyIndex];\n        historyIndex++;\n        const nextState = moveHistory[historyIndex];\n        \n        // Find the piece that moved\n        const movement = findMovement(prevState.board, nextState.board);\n        \n        if (movement) {\n            animateMovement(movement, prevState, nextState);\n        } else {\n            displayHistoryState();\n        }\n        \n        updateHistoryButtons();\n    }\n\n    function findMovement(prevBoard, nextBoard) {\n        let from = null;\n        let to = null;\n        let piece = null;\n        \n        for (let r = 0; r < 4; r++) {\n            for (let c = 0; c < 4; c++) {\n                const prev = prevBoard[r][c];\n                const next = nextBoard[r][c];\n                \n                // Find where piece disappeared (from)\n                if (prev && (!next || next.color !== prev.color || next.type !== prev.type)) {\n                    if (!from) {\n                        from = { r, c };\n                        piece = prev;\n                    }\n                }\n                \n                // Find where piece appeared (to)\n                if (next && (!prev || prev.color !== next.color || prev.type !== next.type)) {\n                    to = { r, c };\n                }\n            }\n        }\n        \n        // Handle placement (no 'from', just 'to')\n        if (!from && to) {\n            return { type: 'place', to, piece: nextBoard[to.r][to.c] };\n        }\n        \n        if (from && to) {\n            return { type: 'move', from, to, piece };\n        }\n        \n        return null;\n    }\n\n    function animateMovement(movement, prevState, nextState) {\n        animationInProgress = true;\n        \n        const startTime = performance.now();\n        const duration = 300; // ms\n        \n        function animate(currentTime) {\n            const elapsed = currentTime - startTime;\n            const progress = Math.min(elapsed / duration, 1);\n            \n            // Ease out cubic\n            const eased = 1 - Math.pow(1 - progress, 3);\n            \n            // Render the animation frame\n            renderAnimationFrame(prevState, nextState, movement, eased);\n            \n            if (progress < 1) {\n                requestAnimationFrame(animate);\n            } else {\n                animationInProgress = false;\n                displayHistoryState();\n            }\n        }\n        \n        requestAnimationFrame(animate);\n    }\n\n    function renderAnimationFrame(prevState, nextState, movement, progress) {\n        ctx.clearRect(0, 0, canvas.width, canvas.height);\n        \n        // Draw board squares\n        for (let r = 0; r < 4; r++) {\n            for (let c = 0; c < 4; c++) {\n                ctx.fillStyle = (r + c) % 2 === 0 ? \"#5e4533\" : \"#3d2b1f\";\n                ctx.fillRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);\n            }\n        }\n        \n        ctx.textAlign = 'center';\n        ctx.textBaseline = 'middle';\n        ctx.font = `${CELL_SIZE * 0.7}px \"Segoe UI Symbol\"`;\n        \n        // Draw all pieces except the moving one\n        for (let r = 0; r < 4; r++) {\n            for (let c = 0; c < 4; c++) {\n                // Skip the moving piece positions\n                if (movement.type === 'move') {\n                    if ((r === movement.from.r && c === movement.from.c) ||\n                        (r === movement.to.r && c === movement.to.c)) {\n                        // At destination, show captured piece fading out if any\n                        if (r === movement.to.r && c === movement.to.c) {\n                            const capturedPiece = prevState.board[r][c];\n                            if (capturedPiece && capturedPiece.color !== movement.piece.color) {\n                                ctx.globalAlpha = 1 - progress;\n                                drawPiece(capturedPiece, c, r);\n                                ctx.globalAlpha = 1;\n                            }\n                        }\n                        continue;\n                    }\n                } else if (movement.type === 'place') {\n                    if (r === movement.to.r && c === movement.to.c) {\n                        continue;\n                    }\n                }\n                \n                const p = prevState.board[r][c];\n                if (p) drawPiece(p, c, r);\n            }\n        }\n        \n        // Animate the moving piece\n        if (movement.type === 'move') {\n            const fromX = movement.from.c * CELL_SIZE + CELL_SIZE / 2;\n            const fromY = movement.from.r * CELL_SIZE + CELL_SIZE / 2;\n            const toX = movement.to.c * CELL_SIZE + CELL_SIZE / 2;\n            const toY = movement.to.r * CELL_SIZE + CELL_SIZE / 2;\n            \n            const currentX = fromX + (toX - fromX) * progress;\n            const currentY = fromY + (toY - fromY) * progress;\n            \n            // Draw trail effect\n            ctx.globalAlpha = 0.3 * (1 - progress);\n            drawPieceAt(movement.piece, fromX, fromY);\n            ctx.globalAlpha = 1;\n            \n            // Draw moving piece with slight scale bounce\n            const scale = 1 + 0.2 * Math.sin(progress * Math.PI);\n            drawPieceAt(movement.piece, currentX, currentY, scale);\n            \n        } else if (movement.type === 'place') {\n            const x = movement.to.c * CELL_SIZE + CELL_SIZE / 2;\n            const y = movement.to.r * CELL_SIZE + CELL_SIZE / 2;\n            \n            // Pop-in animation\n            const scale = progress * (1 + 0.3 * Math.sin(progress * Math.PI));\n            ctx.globalAlpha = progress;\n            drawPieceAt(movement.piece, x, y, scale);\n            ctx.globalAlpha = 1;\n        }\n    }\n\n    function drawPiece(p, c, r) {\n        const x = c * CELL_SIZE + CELL_SIZE / 2;\n        const y = r * CELL_SIZE + CELL_SIZE / 2;\n        drawPieceAt(p, x, y, 1);\n    }\n\n    function drawPieceAt(p, x, y, scale = 1) {\n        ctx.save();\n        ctx.translate(x, y);\n        ctx.scale(scale, scale);\n        ctx.translate(-x, -y);\n        \n        ctx.fillStyle = p.color === 'white' ? \"#fff\" : \"#111\";\n        if (p.color === 'black') {\n            ctx.strokeStyle = \"#888\";\n            ctx.lineWidth = 1;\n            ctx.strokeText(PIECE_CHARS[p.color][p.type], x, y);\n        }\n        ctx.fillText(PIECE_CHARS[p.color][p.type], x, y);\n        \n        ctx.restore();\n    }
+                playbackBtn.innerHTML = '⏸ Stop';
+                playbackBtn.classList.add('playing');
+            } else {
+                playbackBtn.innerHTML = '▶ Play';
+                playbackBtn.classList.remove('playing');
+            }
+        }
+    }
+
+    window.closeWinScreen = () => {
+        document.getElementById('win-screen').classList.add('hidden');
+        document.getElementById('game-screen').classList.remove('hidden');
+        
+        // Show game over controls
+        showGameOverControls();
+        
+        // Go to end of history to show final state
+        historyGoToEnd();
+    };
+
+    function showGameOverControls() {
+        const gameOverControls = document.getElementById('game-over-controls');
+        const quitBtn = document.getElementById('quit-btn');
+        if (gameOverControls) gameOverControls.classList.add('visible');
+        if (quitBtn) quitBtn.style.display = 'none';
+    }
+
+    function hideGameOverControls() {
+        const gameOverControls = document.getElementById('game-over-controls');
+        const quitBtn = document.getElementById('quit-btn');
+        if (gameOverControls) gameOverControls.classList.remove('visible');
+        if (quitBtn) quitBtn.style.display = 'block';
+    }
+
+    // Animated Playback
+    window.togglePlayback = () => {
+        if (isPlayingBack) {
+            stopPlayback();
+        } else {
+            startPlayback();
+        }
+    };
+
+    function startPlayback() {
+        if (moveHistory.length <= 1) return;
+        
+        isPlayingBack = true;
+        
+        // Start from beginning if at end
+        if (historyIndex >= moveHistory.length - 1) {
+            historyIndex = 0;
+            displayHistoryState();
+        }
+        
+        updateHistoryButtons();
+        
+        playbackInterval = setInterval(() => {
+            if (historyIndex < moveHistory.length - 1) {
+                animateToNextMove();
+            } else {
+                stopPlayback();
+            }
+        }, 800);
+    }
+
+    function stopPlayback() {
+        isPlayingBack = false;
+        if (playbackInterval) {
+            clearInterval(playbackInterval);
+            playbackInterval = null;
+        }
+        updateHistoryButtons();
+    }
+
+    function animateToNextMove() {
+        if (historyIndex >= moveHistory.length - 1) return;
+        
+        const prevState = moveHistory[historyIndex];
+        historyIndex++;
+        const nextState = moveHistory[historyIndex];
+        
+        // Find the piece that moved
+        const movement = findMovement(prevState.board, nextState.board);
+        
+        if (movement) {
+            animateMovement(movement, prevState, nextState);
+        } else {
+            displayHistoryState();
+        }
+        
+        updateHistoryButtons();
+    }
+
+    function findMovement(prevBoard, nextBoard) {
+        let from = null;
+        let to = null;
+        let piece = null;
+        
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                const prev = prevBoard[r][c];
+                const next = nextBoard[r][c];
+                
+                // Find where piece disappeared (from)
+                if (prev && (!next || next.color !== prev.color || next.type !== prev.type)) {
+                    if (!from) {
+                        from = { r, c };
+                        piece = prev;
+                    }
+                }
+                
+                // Find where piece appeared (to)
+                if (next && (!prev || prev.color !== next.color || prev.type !== next.type)) {
+                    to = { r, c };
+                }
+            }
+        }
+        
+        // Handle placement (no 'from', just 'to')
+        if (!from && to) {
+            return { type: 'place', to, piece: nextBoard[to.r][to.c] };
+        }
+        
+        if (from && to) {
+            return { type: 'move', from, to, piece };
+        }
+        
+        return null;
+    }
+
+    function animateMovement(movement, prevState, nextState) {
+        animationInProgress = true;
+        
+        const startTime = performance.now();
+        const duration = 300; // ms
+        
+        function animate(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            // Ease out cubic
+            const eased = 1 - Math.pow(1 - progress, 3);
+            
+            // Render the animation frame
+            renderAnimationFrame(prevState, nextState, movement, eased);
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                animationInProgress = false;
+                displayHistoryState();
+            }
+        }
+        
+        requestAnimationFrame(animate);
+    }
+
+    function renderAnimationFrame(prevState, nextState, movement, progress) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw board squares
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                ctx.fillStyle = (r + c) % 2 === 0 ? "#5e4533" : "#3d2b1f";
+                ctx.fillRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+        }
+        
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `${CELL_SIZE * 0.7}px "Segoe UI Symbol"`;
+        
+        // Draw all pieces except the moving one
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                // Skip the moving piece positions
+                if (movement.type === 'move') {
+                    if ((r === movement.from.r && c === movement.from.c) ||
+                        (r === movement.to.r && c === movement.to.c)) {
+                        // At destination, show captured piece fading out if any
+                        if (r === movement.to.r && c === movement.to.c) {
+                            const capturedPiece = prevState.board[r][c];
+                            if (capturedPiece && capturedPiece.color !== movement.piece.color) {
+                                ctx.globalAlpha = 1 - progress;
+                                drawPiece(capturedPiece, c, r);
+                                ctx.globalAlpha = 1;
+                            }
+                        }
+                        continue;
+                    }
+                } else if (movement.type === 'place') {
+                    if (r === movement.to.r && c === movement.to.c) {
+                        continue;
+                    }
+                }
+                
+                const p = prevState.board[r][c];
+                if (p) drawPiece(p, c, r);
+            }
+        }
+        
+        // Animate the moving piece
+        if (movement.type === 'move') {
+            const fromX = movement.from.c * CELL_SIZE + CELL_SIZE / 2;
+            const fromY = movement.from.r * CELL_SIZE + CELL_SIZE / 2;
+            const toX = movement.to.c * CELL_SIZE + CELL_SIZE / 2;
+            const toY = movement.to.r * CELL_SIZE + CELL_SIZE / 2;
+            
+            const currentX = fromX + (toX - fromX) * progress;
+            const currentY = fromY + (toY - fromY) * progress;
+            
+            // Draw trail effect
+            ctx.globalAlpha = 0.3 * (1 - progress);
+            drawPieceAt(movement.piece, fromX, fromY);
+            ctx.globalAlpha = 1;
+            
+            // Draw moving piece with slight scale bounce
+            const scale = 1 + 0.2 * Math.sin(progress * Math.PI);
+            drawPieceAt(movement.piece, currentX, currentY, scale);
+            
+        } else if (movement.type === 'place') {
+            const x = movement.to.c * CELL_SIZE + CELL_SIZE / 2;
+            const y = movement.to.r * CELL_SIZE + CELL_SIZE / 2;
+            
+            // Pop-in animation
+            const scale = progress * (1 + 0.3 * Math.sin(progress * Math.PI));
+            ctx.globalAlpha = progress;
+            drawPieceAt(movement.piece, x, y, scale);
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    function drawPiece(p, c, r) {
+        const x = c * CELL_SIZE + CELL_SIZE / 2;
+        const y = r * CELL_SIZE + CELL_SIZE / 2;
+        drawPieceAt(p, x, y, 1);
+    }
+
+    function drawPieceAt(p, x, y, scale = 1) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(scale, scale);
+        ctx.translate(-x, -y);
+        
+        ctx.fillStyle = p.color === 'white' ? "#fff" : "#111";
+        if (p.color === 'black') {
+            ctx.strokeStyle = "#888";
+            ctx.lineWidth = 1;
+            ctx.strokeText(PIECE_CHARS[p.color][p.type], x, y);
+        }
+        ctx.fillText(PIECE_CHARS[p.color][p.type], x, y);
+        
+        ctx.restore();
+    }
 
     /** --- AI ENGINE (MINIMAX WITH ALPHA-BETA PRUNING) --- **/
     
