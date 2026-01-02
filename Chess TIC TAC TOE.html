@@ -323,6 +323,68 @@
             button { padding: 14px 24px; }
             .inv-item { min-height: 50px; }
         }
+
+        /* History controls */
+        .history-controls {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .history-btn {
+            padding: 8px 12px;
+            font-size: 1.2rem;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .history-btn:hover:not(:disabled) {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .history-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .history-indicator {
+            font-size: 0.75rem;
+            color: #f39c12;
+            background: rgba(243, 156, 18, 0.2);
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .history-indicator.visible {
+            display: block;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 1.5rem;
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            padding: 5px 10px;
+        }
+
+        .close-btn:hover {
+            color: white;
+        }
+
+        .menu-card {
+            position: relative;
+        }
     </style>
 </head>
 <body>
@@ -417,6 +479,14 @@
                 <div class="inv-item" data-type="B" data-player="black">♝</div>
             </div>
 
+            <div class="history-controls">
+                <button class="history-btn" id="history-start" onclick="historyGoToStart()" title="Go to start">⏮</button>
+                <button class="history-btn" id="history-back" onclick="historyGoBack()" title="Previous move">◀</button>
+                <button class="history-btn" id="history-forward" onclick="historyGoForward()" title="Next move">▶</button>
+                <button class="history-btn" id="history-end" onclick="historyGoToEnd()" title="Go to current">⏭</button>
+            </div>
+            <div class="history-indicator" id="history-indicator">📜 Viewing move history</div>
+
             <button onclick="location.reload()" style="background:#444; color:white;">Quit Game</button>
         </div>
         <canvas id="boardCanvas"></canvas>
@@ -425,7 +495,9 @@
     <!-- WIN SCREEN -->
     <div id="win-screen" class="screen hidden" style="background: rgba(0,0,0,0.85); z-index: 200;">
         <div class="menu-card">
+            <button class="close-btn" onclick="closeWinScreen()" title="View board">✕</button>
             <h1 id="winner-text">WHITE WINS!</h1>
+            <p style="font-size: 0.85rem; color: #aaa;">Use arrow keys or ✕ to view move history</p>
             <div id="rematch-section" style="display:none;">
                 <button id="rematch-btn" onclick="handleRematchClick()">🔄 Rematch</button>
                 <p id="rematch-status" class="waiting-text" style="display:none;"></p>
@@ -460,6 +532,11 @@
     let isAIGame = false;
     let aiColor = 'black';
     let aiThinking = false;
+
+    // Move history for replay
+    let moveHistory = [];
+    let historyIndex = -1;
+    let isViewingHistory = false;
 
     function generateRoomCode() {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -701,6 +778,42 @@
         startRematch(true);
     };
 
+    function aiRematch() {
+        // Swap colors on rematch
+        myColor = myColor === 'white' ? 'black' : 'white';
+        aiColor = aiColor === 'white' ? 'black' : 'white';
+        
+        // Reset game state
+        board = Array(4).fill().map(() => Array(4).fill(null));
+        inventories = { white: ['P', 'R', 'N', 'B'], black: ['P', 'R', 'N', 'B'] };
+        placementComplete = { white: false, black: false };
+        turn = 'white';
+        gameOver = false;
+        selectedInv = null;
+        selectedBoard = null;
+        validMoves = [];
+        
+        // Reset history
+        moveHistory = [];
+        historyIndex = -1;
+        isViewingHistory = false;
+        
+        // Reset rematch button
+        document.getElementById('rematch-btn').disabled = false;
+        document.getElementById('rematch-btn').innerText = '🔄 Rematch';
+        
+        showScreen('game-screen');
+        initBoardUI();
+        
+        // Save initial state
+        saveToHistory();
+        
+        // If AI is white, it goes first
+        if (aiColor === 'white') {
+            setTimeout(() => makeAIMove(), 600);
+        }
+    }
+
     window.rejectRematch = () => {
         if (conn && conn.open) {
             conn.send({ type: 'rematch-reject' });
@@ -752,6 +865,11 @@
         validMoves = [];
         rematchRequested = { me: false, opponent: false };
         
+        // Reset history
+        moveHistory = [];
+        historyIndex = -1;
+        isViewingHistory = false;
+        
         // Reset UI
         document.getElementById('rematch-btn').disabled = false;
         document.getElementById('rematch-btn').innerText = '🔄 Rematch';
@@ -759,6 +877,9 @@
         
         showScreen('game-screen');
         initBoardUI();
+        
+        // Save initial state
+        saveToHistory();
         
         // White player sends initial state
         if (myColor === 'white') {
@@ -885,8 +1006,13 @@
     window.startLocalGame = () => { 
         isOnline = false;
         isAIGame = false;
+        // Reset history
+        moveHistory = [];
+        historyIndex = -1;
+        isViewingHistory = false;
         showScreen('game-screen'); 
-        initBoardUI(); 
+        initBoardUI();
+        saveToHistory();
         updateUI(); 
     };
 
@@ -895,8 +1021,13 @@
         isAIGame = true;
         myColor = 'white';
         aiColor = 'black';
+        // Reset history
+        moveHistory = [];
+        historyIndex = -1;
+        isViewingHistory = false;
         showScreen('game-screen');
         initBoardUI();
+        saveToHistory();
         updateUI();
     };
 
@@ -926,6 +1057,12 @@
 
     function handleBoardInput(e) {
         if (gameOver) return;
+        
+        // Block moves when viewing history
+        if (isViewingHistory) {
+            showToast("Return to current state first!");
+            return;
+        }
         
         // Strict turn check for online mode
         if (isOnline && turn !== myColor) {
@@ -1007,6 +1144,9 @@
     function endTurnSequence() {
         const currentPlayer = turn;
         
+        // Save state to history before any changes
+        saveToHistory();
+        
         // Check for win BEFORE switching turns
         if (checkWin(currentPlayer)) {
             gameOver = true;
@@ -1053,6 +1193,26 @@
         const turnTxt = document.getElementById('turn-txt');
         const turnIndicator = document.getElementById('turn-indicator');
         const phaseIndicator = document.getElementById('phase-indicator');
+        
+        // Show history viewing state
+        if (isViewingHistory) {
+            const histState = moveHistory[historyIndex];
+            turnTxt.innerText = `MOVE ${historyIndex + 1}/${moveHistory.length}`;
+            turnTxt.className = 'turn-display';
+            turnTxt.style.background = 'rgba(243, 156, 18, 0.3)';
+            turnIndicator.style.display = 'block';
+            turnIndicator.className = 'turn-indicator';
+            turnIndicator.style.background = 'rgba(243, 156, 18, 0.2)';
+            turnIndicator.style.color = '#f39c12';
+            turnIndicator.textContent = '\ud83d\udcdc Viewing history - use arrows to navigate';
+            phaseIndicator.textContent = `${histState.turn.toUpperCase()}'s turn at this point`;
+            updateHistoryButtons();
+            return;
+        } else {
+            turnTxt.style.background = '';
+            turnIndicator.style.background = '';
+            turnIndicator.style.color = '';
+        }
         
         if (isAIGame) {
             if (turn === myColor) {
@@ -1122,6 +1282,9 @@
             item.classList.toggle('disabled', !exists);
             item.classList.toggle('selected', selectedInv === type && player === turn);
         });
+        
+        // Always update history buttons
+        updateHistoryButtons();
     }
 
     function render() {
@@ -1206,6 +1369,12 @@
             const type = item.dataset.type;
             const player = item.dataset.player;
             
+            // Block inventory clicks when viewing history
+            if (isViewingHistory) {
+                showToast("Return to current state first!");
+                return;
+            }
+            
             // Block inventory clicks during AI turn
             if (isAIGame && turn === aiColor) {
                 showToast("Wait for AI!");
@@ -1249,6 +1418,158 @@
         lastTouchEnd = now;
     }, false);
     let lastTouchEnd = 0;
+
+    // Keyboard navigation for history
+    document.addEventListener('keydown', (e) => {
+        if (document.getElementById('game-screen').classList.contains('hidden') && 
+            document.getElementById('win-screen').classList.contains('hidden')) return;
+        
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            historyGoBack();
+        } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            historyGoForward();
+        } else if (e.key === 'Home') {
+            e.preventDefault();
+            historyGoToStart();
+        } else if (e.key === 'End') {
+            e.preventDefault();
+            historyGoToEnd();
+        }
+    });
+
+    function saveToHistory() {
+        const state = {
+            board: board.map(row => row.map(cell => cell ? {...cell} : null)),
+            inventories: {
+                white: [...inventories.white],
+                black: [...inventories.black]
+            },
+            placementComplete: { ...placementComplete },
+            turn: turn
+        };
+        
+        // If we're not at the end, remove future states
+        if (historyIndex < moveHistory.length - 1) {
+            moveHistory = moveHistory.slice(0, historyIndex + 1);
+        }
+        
+        moveHistory.push(state);
+        historyIndex = moveHistory.length - 1;
+        updateHistoryButtons();
+    }
+
+    function historyGoBack() {
+        if (historyIndex > 0) {
+            historyIndex--;
+            displayHistoryState();
+        }
+    }
+
+    function historyGoForward() {
+        if (historyIndex < moveHistory.length - 1) {
+            historyIndex++;
+            displayHistoryState();
+        }
+    }
+
+    function historyGoToStart() {
+        if (moveHistory.length > 0) {
+            historyIndex = 0;
+            displayHistoryState();
+        }
+    }
+
+    function historyGoToEnd() {
+        if (moveHistory.length > 0) {
+            historyIndex = moveHistory.length - 1;
+            displayHistoryState();
+        }
+    }
+
+    function displayHistoryState() {
+        if (historyIndex < 0 || historyIndex >= moveHistory.length) return;
+        
+        const state = moveHistory[historyIndex];
+        isViewingHistory = historyIndex < moveHistory.length - 1;
+        
+        // Clear selections when viewing history
+        selectedInv = null;
+        selectedBoard = null;
+        validMoves = [];
+        
+        // Render the historical state
+        renderHistoryState(state);
+        updateHistoryButtons();
+        updateUI();
+    }
+
+    function renderHistoryState(state) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw board squares
+        for(let r = 0; r < 4; r++) {
+            for(let c = 0; c < 4; c++) {
+                ctx.fillStyle = (r + c) % 2 === 0 ? "#5e4533" : "#3d2b1f"; 
+                ctx.fillRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+        }
+        
+        // Draw pieces from history state
+        ctx.textAlign = 'center'; 
+        ctx.textBaseline = 'middle'; 
+        ctx.font = `${CELL_SIZE * 0.7}px "Segoe UI Symbol"`;
+        
+        for(let r = 0; r < 4; r++) {
+            for(let c = 0; c < 4; c++) {
+                const p = state.board[r][c]; 
+                if (!p) continue;
+                
+                ctx.fillStyle = p.color === 'white' ? "#fff" : "#111";
+                if (p.color === 'black') {
+                    ctx.strokeStyle = "#888"; 
+                    ctx.lineWidth = 1; 
+                    ctx.strokeText(PIECE_CHARS[p.color][p.type], c * CELL_SIZE + CELL_SIZE / 2, r * CELL_SIZE + CELL_SIZE / 2);
+                }
+                ctx.fillText(PIECE_CHARS[p.color][p.type], c * CELL_SIZE + CELL_SIZE / 2, r * CELL_SIZE + CELL_SIZE / 2);
+            }
+        }
+        
+        // Add visual indicator that we're viewing history
+        if (isViewingHistory) {
+            ctx.fillStyle = 'rgba(243, 156, 18, 0.15)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+
+    function updateHistoryButtons() {
+        const startBtn = document.getElementById('history-start');
+        const backBtn = document.getElementById('history-back');
+        const forwardBtn = document.getElementById('history-forward');
+        const endBtn = document.getElementById('history-end');
+        const indicator = document.getElementById('history-indicator');
+        
+        if (startBtn) startBtn.disabled = historyIndex <= 0;
+        if (backBtn) backBtn.disabled = historyIndex <= 0;
+        if (forwardBtn) forwardBtn.disabled = historyIndex >= moveHistory.length - 1;
+        if (endBtn) endBtn.disabled = historyIndex >= moveHistory.length - 1;
+        
+        isViewingHistory = historyIndex < moveHistory.length - 1;
+        if (indicator) {
+            indicator.classList.toggle('visible', isViewingHistory);
+            if (isViewingHistory) {
+                indicator.textContent = `📜 Viewing move ${historyIndex + 1} of ${moveHistory.length}`;
+            }
+        }
+    }
+
+    window.closeWinScreen = () => {
+        document.getElementById('win-screen').classList.add('hidden');
+        document.getElementById('game-screen').classList.remove('hidden');
+        // Go to end of history to show final state
+        historyGoToEnd();
+    };
 
     /** --- AI ENGINE (MINIMAX WITH ALPHA-BETA PRUNING) --- **/
     
