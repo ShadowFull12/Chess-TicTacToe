@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Tic-Tac-Toe - P2P Edition</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --primary: #d4a373;
+            --secondary: #faedcd;
+            --dark: #1a1a1a;
+            --white-piece: #ffffff;
+            --black-piece: #222222;
+            --accent: #e76f51;
+            --valid: rgba(46, 204, 113, 0.6);
+            --capture: rgba(231, 76, 60, 0.8);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            min-height: 100%;
+            height: 100%;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: radial-gradient(circle, #2c3e50 0%, #000000 100%);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+            z-index: 100;
+        }
+
+        .hidden {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transform: scale(0.9) !important;
+        }
+
+        .menu-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+            padding: 2rem;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            min-width: 320px;
+            max-width: 90vw;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin: 0 0 0.5rem 0;
+            background: linear-gradient(to bottom, #faedcd, #d4a373);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+        }
+
+        .menu-btns {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 1.5rem;
+        }
+
+        button {
+            padding: 12px 20px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: var(--primary);
+            color: #333;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            background: var(--secondary);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: wait;
+        }
+
+        .room-code-display {
+            font-size: 2.5rem;
+            font-weight: bold;
+            letter-spacing: 8px;
+            background: rgba(0,0,0,0.4);
+            padding: 15px 25px;
+            border-radius: 12px;
+            margin: 15px 0;
+            font-family: monospace;
+            color: var(--primary);
+        }
+
+        .room-input {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 5px;
+            text-align: center;
+            background: rgba(0,0,0,0.4);
+            border: 2px solid #555;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin: 15px 0;
+            width: 180px;
+            text-transform: uppercase;
+        }
+
+        .room-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .waiting-text {
+            color: #aaa;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #game-screen {
+            display: flex;
+            flex-direction: row;
+            gap: 40px;
+            padding: 20px;
+        }
+
+        .game-info {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 250px;
+        }
+
+        .status-box {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .turn-display {
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-top: 8px;
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        .your-turn {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(212, 163, 115, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(212, 163, 115, 0); }
+        }
+
+        .white-turn { background: var(--secondary); color: #333; }
+        .black-turn { background: #111; color: white; border: 1px solid #444; }
+
+        .inventory {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            background: linear-gradient(135deg, #8b7355 0%, #6b5344 50%, #8b7355 100%);
+            padding: 12px;
+            border-radius: 15px;
+            border: 3px solid #5a4332;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .inv-item {
+            aspect-ratio: 1/1;
+            background: linear-gradient(145deg, #d4a373 0%, #c49464 100%);
+            border: 2px solid #a07850;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.2rem;
+            cursor: pointer;
+            box-shadow: inset 0 1px 2px rgba(255,255,255,0.3), 0 2px 4px rgba(0,0,0,0.2);
+            transition: all 0.15s ease;
+        }
+
+        .inv-item:hover:not(.disabled) {
+            transform: scale(1.05);
+            box-shadow: inset 0 1px 2px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .inv-item.selected { 
+            border-color: #fff; 
+            background: linear-gradient(145deg, #f0c896 0%, #e0b070 100%);
+            box-shadow: 0 0 12px rgba(255,255,255,0.5), inset 0 1px 2px rgba(255,255,255,0.4);
+        }
+        .inv-item.disabled { opacity: 0.25; cursor: default; background: #777; }
+        .inv-item.locked { opacity: 0.4; cursor: not-allowed; position: relative; }
+        .inv-item.locked::after { content: '🔒'; position: absolute; font-size: 0.8rem; bottom: 2px; right: 2px; }
+
+        /* White pieces in inventory */
+        #white-inv .inv-item { 
+            color: #fff; 
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5), 0 0 1px #000;
+        }
+
+        /* Black pieces in inventory */
+        #black-inv .inv-item { 
+            color: #1a1a1a; 
+            text-shadow: 0 1px 2px rgba(255,255,255,0.3);
+        }
+
+        .phase-indicator {
+            font-size: 0.7rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-top: 5px;
+            background: rgba(0,0,0,0.3);
+        }
+
+        .phase-place { color: #f39c12; }
+        .phase-move { color: #2ecc71; }
+
+        canvas {
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            border: 8px solid #3d2b1f;
+            border-radius: 12px;
+            cursor: crosshair;
+        }
+
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            background: var(--accent);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            transform: translateY(100px);
+            transition: transform 0.3s;
+            z-index: 1000;
+        }
+
+        .turn-indicator {
+            font-size: 0.8rem;
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+
+        .my-turn-indicator {
+            background: rgba(46, 204, 113, 0.3);
+            color: #2ecc71;
+        }
+
+        .wait-indicator {
+            background: rgba(231, 76, 60, 0.3);
+            color: #e74c3c;
+        }
+
+        @media (max-width: 850px) {
+            #game-screen { flex-direction: column; align-items: center; overflow-y: auto; padding: 10px; gap: 15px; }
+            .game-info { width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 10px; }
+            .status-box { flex: 1; min-width: 150px; }
+            .inventory { grid-template-columns: repeat(4, 1fr); width: auto; flex: 1; min-width: 200px; }
+            .inv-item { font-size: 1.8rem; }
+            canvas { max-width: 95vw; max-height: 50vh; }
+            h1 { font-size: 1.8rem; }
+            h2 { font-size: 1.3rem; }
+            .menu-card { padding: 1.5rem; min-width: 280px; }
+            button { padding: 10px 16px; font-size: 0.9rem; }
+            .room-code-display { font-size: 1.8rem; letter-spacing: 5px; padding: 12px 18px; }
+            .room-input { font-size: 1.2rem; width: 150px; }
+        }
+
+        @media (max-width: 400px) {
+            #game-screen { padding: 5px; gap: 10px; }
+            .game-info { gap: 8px; }
+            .inv-item { font-size: 1.5rem; }
+            .status-box { padding: 8px; }
+            .turn-display { font-size: 1rem; padding: 6px; }
+        }
+
+        /* Touch-friendly */
+        @media (hover: none) {
+            button { padding: 14px 24px; }
+            .inv-item { min-height: 50px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- MAIN MENU -->
+    <div id="menu-screen" class="screen">
+        <div class="menu-card">
+            <h1>CHESS TIC-TAC-TOE</h1>
+            <p>Strategy meets Simplicity</p>
+            <div class="menu-btns">
+                <button onclick="showScreen('mode-screen')">Play Now</button>
+                <button onclick="showScreen('how-to-screen')">How to Play</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODE SELECTION -->
+    <div id="mode-screen" class="screen hidden">
+        <div class="menu-card">
+            <h2>Select Game Mode</h2>
+            <div class="menu-btns">
+                <button onclick="startLocalGame()">Local Multiplayer</button>
+                <button onclick="createRoom()">Create Room</button>
+                <button onclick="showScreen('join-screen')">Join Room</button>
+                <button onclick="showScreen('menu-screen')" style="background:#444; color:white;">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CREATE ROOM SCREEN -->
+    <div id="host-screen" class="screen hidden">
+        <div class="menu-card">
+            <h2>Room Created!</h2>
+            <p>Share this code with your friend:</p>
+            <div class="room-code-display" id="room-code">----</div>
+            <button onclick="copyRoomCode()">📋 Copy Code</button>
+            <p class="waiting-text"><span class="spinner"></span>Waiting for opponent to join...</p>
+            <button onclick="cancelRoom()" style="background:#444; color:white; margin-top: 15px;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- JOIN ROOM SCREEN -->
+    <div id="join-screen" class="screen hidden">
+        <div class="menu-card">
+            <h2>Join Room</h2>
+            <p>Enter the room code:</p>
+            <input type="text" class="room-input" id="join-code-input" maxlength="6" placeholder="------" autocomplete="off">
+            <div class="menu-btns">
+                <button onclick="joinRoom()" id="join-btn">Join Game</button>
+                <button onclick="showScreen('mode-screen')" style="background:#444; color:white;">Back</button>
+            </div>
+            <p id="join-status" class="waiting-text" style="display:none;"><span class="spinner"></span>Connecting...</p>
+        </div>
+    </div>
+
+    <!-- HOW TO PLAY -->
+    <div id="how-to-screen" class="screen hidden">
+        <div class="how-to-card menu-card">
+            <h2>Rules</h2>
+            <p>1. Each player has 4 pieces: Pawn, Rook, Knight, Bishop.</p>
+            <p>2. <strong>Place 3 pieces</strong> before you can move them.</p>
+            <p>3. Align 4 in a row to win.</p>
+            <p>4. Move like chess. Capture returns pieces to hand.</p>
+            <p>5. If captured below 3, place a piece first.</p>
+            <p>6. Pawns reverse at edges.</p>
+            <button onclick="showScreen('menu-screen')">Got it!</button>
+        </div>
+    </div>
+
+    <!-- GAMEPLAY SCREEN -->
+    <div id="game-screen" class="screen hidden">
+        <div class="game-info">
+            <div class="status-box">
+                <div id="player-identity" style="font-size:0.8rem; color:var(--accent)">LOCAL MODE</div>
+                <div id="turn-txt" class="turn-display white-turn">WHITE'S TURN</div>
+                <div id="turn-indicator" class="turn-indicator my-turn-indicator" style="display:none;">Your turn!</div>
+                <div id="phase-indicator" class="phase-indicator phase-place">📍 Place pieces (need 3 on board)</div>
+            </div>
+
+            <div id="white-inv" class="inventory">
+                <div class="inv-item" data-type="P" data-player="white">♙</div>
+                <div class="inv-item" data-type="R" data-player="white">♖</div>
+                <div class="inv-item" data-type="N" data-player="white">♘</div>
+                <div class="inv-item" data-type="B" data-player="white">♗</div>
+            </div>
+
+            <div id="black-inv" class="inventory" style="display:none">
+                <div class="inv-item" data-type="P" data-player="black">♟</div>
+                <div class="inv-item" data-type="R" data-player="black">♜</div>
+                <div class="inv-item" data-type="N" data-player="black">♞</div>
+                <div class="inv-item" data-type="B" data-player="black">♝</div>
+            </div>
+
+            <button onclick="location.reload()" style="background:#444; color:white;">Quit Game</button>
+        </div>
+        <canvas id="boardCanvas"></canvas>
+    </div>
+
+    <!-- WIN SCREEN -->
+    <div id="win-screen" class="screen hidden" style="background: rgba(0,0,0,0.85); z-index: 200;">
+        <div class="menu-card">
+            <h1 id="winner-text">WHITE WINS!</h1>
+            <div id="rematch-section" style="display:none;">
+                <button id="rematch-btn" onclick="requestRematch()">🔄 Rematch</button>
+                <p id="rematch-status" class="waiting-text" style="display:none;"></p>
+            </div>
+            <button onclick="leaveGame()" style="margin-top:10px; background:#444; color:white;">Back to Menu</button>
+        </div>
+    </div>
+
+    <!-- REMATCH REQUEST POPUP -->
+    <div id="rematch-popup" class="screen hidden" style="background: rgba(0,0,0,0.9); z-index: 250;">
+        <div class="menu-card">
+            <h2>🔄 Rematch Request</h2>
+            <p>Your opponent wants a rematch!</p>
+            <div class="menu-btns" style="margin-top: 20px;">
+                <button onclick="acceptRematch()" style="background: #2ecc71; color: white;">✓ Accept</button>
+                <button onclick="rejectRematch()" style="background: #e74c3c; color: white;">✗ Decline</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast">Code Copied!</div>
+
+<script>
+    /** --- P2P NETWORKING WITH PEERJS --- **/
+    let peer = null;
+    let conn = null;
+    let isOnline = false;
+    let isHost = false;
+    let myColor = 'white';
+    let roomCode = '';
+    let rematchRequested = { me: false, opponent: false };
+
+    function generateRoomCode() {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return code;
+    }
+
+    window.createRoom = () => {
+        roomCode = generateRoomCode();
+        document.getElementById('room-code').textContent = roomCode;
+        showScreen('host-screen');
+        
+        isHost = true;
+        isOnline = true;
+        
+        // Create peer with room code as ID
+        peer = new Peer('chess-ttt-' + roomCode, {
+            debug: 0
+        });
+        
+        peer.on('open', (id) => {
+            console.log('Room created with ID:', id);
+        });
+        
+        peer.on('connection', (connection) => {
+            conn = connection;
+            setupConnection();
+        });
+        
+        peer.on('error', (err) => {
+            console.error('Peer error:', err);
+            if (err.type === 'unavailable-id') {
+                showToast('Room code taken, trying new code...');
+                peer.destroy();
+                setTimeout(() => createRoom(), 500);
+            } else {
+                showToast('Connection error: ' + err.type);
+            }
+        });
+    };
+
+    window.copyRoomCode = () => {
+        navigator.clipboard.writeText(roomCode).then(() => {
+            showToast('Code copied!');
+        }).catch(() => {
+            const textArea = document.createElement('textarea');
+            textArea.value = roomCode;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showToast('Code copied!');
+        });
+    };
+
+    window.cancelRoom = () => {
+        if (peer) {
+            peer.destroy();
+            peer = null;
+        }
+        showScreen('mode-screen');
+    };
+
+    window.joinRoom = () => {
+        const input = document.getElementById('join-code-input');
+        const code = input.value.toUpperCase().trim();
+        
+        if (code.length !== 6) {
+            showToast('Please enter a 6-character code');
+            return;
+        }
+        
+        roomCode = code;
+        isHost = false;
+        isOnline = true;
+        
+        document.getElementById('join-status').style.display = 'block';
+        document.getElementById('join-btn').disabled = true;
+        
+        peer = new Peer({
+            debug: 0
+        });
+        
+        peer.on('open', () => {
+            conn = peer.connect('chess-ttt-' + roomCode, {
+                reliable: true
+            });
+            
+            conn.on('open', () => {
+                setupConnection();
+            });
+            
+            conn.on('error', (err) => {
+                showToast('Failed to connect');
+                document.getElementById('join-status').style.display = 'none';
+                document.getElementById('join-btn').disabled = false;
+            });
+        });
+        
+        peer.on('error', (err) => {
+            console.error('Peer error:', err);
+            showToast('Room not found or connection failed');
+            document.getElementById('join-status').style.display = 'none';
+            document.getElementById('join-btn').disabled = false;
+        });
+        
+        // Timeout for connection
+        setTimeout(() => {
+            if (!conn || !conn.open) {
+                showToast('Connection timed out');
+                document.getElementById('join-status').style.display = 'none';
+                document.getElementById('join-btn').disabled = false;
+                if (peer) peer.destroy();
+            }
+        }, 10000);
+    };
+
+    function setupConnection() {
+        conn.on('data', (data) => {
+            handleRemoteData(data);
+        });
+        
+        conn.on('close', () => {
+            showToast('Opponent disconnected');
+        });
+        
+        // Start the game
+        showScreen('game-screen');
+        
+        // Host randomly assigns colors and sends to joiner
+        if (isHost) {
+            myColor = Math.random() < 0.5 ? 'white' : 'black';
+            const opponentColor = myColor === 'white' ? 'black' : 'white';
+            
+            // Send color assignment to opponent
+            setTimeout(() => {
+                conn.send({ type: 'color-assign', color: opponentColor });
+                initBoardUI();
+                // White always goes first, so only send state if we're white
+                if (myColor === 'white') {
+                    setTimeout(() => sendGameState(), 300);
+                }
+            }, 500);
+        }
+    }
+
+    function handleRemoteData(data) {
+        if (data.type === 'color-assign') {
+            // Receive color assignment from host
+            myColor = data.color;
+            initBoardUI();
+            // If we're white, we go first - but host already sent state if they're white
+            // If we're white (joiner), we need to send initial state
+            if (myColor === 'white') {
+                setTimeout(() => sendGameState(), 300);
+            }
+        } else if (data.type === 'state') {
+            // Receive game state
+            board = data.board;
+            inventories = data.inventories;
+            placementComplete = data.placementComplete || { white: false, black: false };
+            turn = data.turn;
+            gameOver = data.gameOver || false;
+            
+            // Clear selections
+            selectedInv = null;
+            selectedBoard = null;
+            validMoves = [];
+            
+            updateUI();
+            render();
+            
+            // Check for winner
+            if (data.winner) {
+                gameOver = true;
+                document.getElementById('winner-text').innerText = `${data.winner.toUpperCase()} WINS!`;
+                document.getElementById('rematch-section').style.display = 'block';
+                showScreen('win-screen');
+                sounds.win();
+            }
+        } else if (data.type === 'rematch-request') {
+            // Show rematch popup to this player
+            showScreen('rematch-popup');
+            sounds.select();
+        } else if (data.type === 'rematch-accept') {
+            // Opponent accepted, start the game with swapped colors
+            startRematch(true);
+        } else if (data.type === 'rematch-reject') {
+            // Opponent rejected, go back to menu
+            showToast('Opponent declined rematch');
+            cleanupAndGoToMenu();
+        } else if (data.type === 'leave-game') {
+            // Opponent left the game
+            showToast('Opponent left the game');
+            cleanupAndGoToMenu();
+        }
+    }
+
+    function sendGameState(winner = null) {
+        if (!conn || !conn.open) return;
+        
+        conn.send({
+            type: 'state',
+            board: board,
+            inventories: inventories,
+            placementComplete: placementComplete,
+            turn: turn,
+            gameOver: gameOver,
+            winner: winner
+        });
+    }
+
+    window.requestRematch = () => {
+        document.getElementById('rematch-btn').disabled = true;
+        document.getElementById('rematch-btn').innerText = '⏳ Waiting...';
+        document.getElementById('rematch-status').style.display = 'block';
+        document.getElementById('rematch-status').innerText = 'Waiting for opponent to respond...';
+        
+        if (conn && conn.open) {
+            conn.send({ type: 'rematch-request' });
+        }
+    };
+
+    window.acceptRematch = () => {
+        if (conn && conn.open) {
+            conn.send({ type: 'rematch-accept' });
+        }
+        startRematch(true);
+    };
+
+    window.rejectRematch = () => {
+        if (conn && conn.open) {
+            conn.send({ type: 'rematch-reject' });
+        }
+        cleanupAndGoToMenu();
+    };
+
+    window.leaveGame = () => {
+        if (conn && conn.open) {
+            conn.send({ type: 'leave-game' });
+        }
+        cleanupAndGoToMenu();
+    };
+
+    function cleanupAndGoToMenu() {
+        // Cleanup connection
+        if (conn) {
+            conn.close();
+            conn = null;
+        }
+        if (peer) {
+            peer.destroy();
+            peer = null;
+        }
+        
+        // Reset state
+        isOnline = false;
+        gameOver = false;
+        rematchRequested = { me: false, opponent: false };
+        
+        // Go to menu
+        location.reload();
+    }
+
+    function startRematch(swapColors = false) {
+        // Swap colors on rematch for fairness
+        if (swapColors) {
+            myColor = myColor === 'white' ? 'black' : 'white';
+        }
+        
+        // Reset game state
+        board = Array(4).fill().map(() => Array(4).fill(null));
+        inventories = { white: ['P', 'R', 'N', 'B'], black: ['P', 'R', 'N', 'B'] };
+        placementComplete = { white: false, black: false };
+        turn = 'white';
+        gameOver = false;
+        selectedInv = null;
+        selectedBoard = null;
+        validMoves = [];
+        rematchRequested = { me: false, opponent: false };
+        
+        // Reset UI
+        document.getElementById('rematch-btn').disabled = false;
+        document.getElementById('rematch-btn').innerText = '🔄 Rematch';
+        document.getElementById('rematch-status').style.display = 'none';
+        
+        showScreen('game-screen');
+        initBoardUI();
+        
+        // White player sends initial state
+        if (myColor === 'white') {
+            setTimeout(() => sendGameState(), 300);
+        }
+    }
+
+    /** --- AUDIO --- **/
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playNote(f, t='triangle', d=0.1, v=0.1) {
+        const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+        o.type=t; o.frequency.setValueAtTime(f, audioCtx.currentTime);
+        g.gain.setValueAtTime(v, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+d);
+        o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+d);
+    }
+    const sounds = {
+        select:()=>playNote(440,'sine',0.05),
+        move:()=>playNote(330,'triangle',0.15),
+        capture:()=>playNote(150,'sawtooth',0.3,0.2),
+        win:()=>[523,659,783].forEach((f,i)=>setTimeout(()=>playNote(f,'sine',0.5),i*150))
+    };
+
+    /** --- GAME STATE --- **/
+    const canvas = document.getElementById('boardCanvas'), ctx = canvas.getContext('2d');
+    let board = Array(4).fill().map(() => Array(4).fill(null));
+    let turn = 'white', selectedInv = null, selectedBoard = null, validMoves = [], gameOver = false;
+    let inventories = { white: ['P', 'R', 'N', 'B'], black: ['P', 'R', 'N', 'B'] };
+    // Track if each player has completed their initial 3-piece placement
+    let placementComplete = { white: false, black: false };
+    const PIECE_CHARS = { white:{P:'♙',R:'♖',N:'♘',B:'♗'}, black:{P:'♟',R:'♜',N:'♞',B:'♝'} };
+    let CELL_SIZE;
+
+    // Count pieces on board for a player
+    function countPiecesOnBoard(player) {
+        let count = 0;
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                if (board[r][c] && board[r][c].color === player) count++;
+            }
+        }
+        return count;
+    }
+
+    // Check if player can move pieces (must have completed initial placement phase)
+    function canMovePieces(player) {
+        return placementComplete[player];
+    }
+
+    // Check if player is still in placement phase (hasn't placed 3 pieces yet)
+    function isInPlacementPhase(player) {
+        return !placementComplete[player];
+    }
+
+    // Update placement status after a piece is placed
+    function checkPlacementComplete(player) {
+        if (!placementComplete[player] && countPiecesOnBoard(player) >= 3) {
+            placementComplete[player] = true;
+        }
+    }
+
+    window.showScreen = (id) => {
+        document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    };
+
+    function showToast(m){
+        const t=document.getElementById('toast');
+        t.innerText=m;
+        t.style.transform="translateY(0)";
+        setTimeout(()=>t.style.transform="translateY(100px)",2000);
+    }
+
+    /** --- LOGIC --- **/
+    function isMyTurn() {
+        if (!isOnline) return true;
+        return turn === myColor;
+    }
+
+    function getValidMoves(r, c) {
+        const p = board[r][c]; if (!p) return [];
+        let moves = [];
+        const addIfPossible = (nr, nc) => {
+            if (nr < 0 || nr >= 4 || nc < 0 || nc >= 4) return false;
+            const t = board[nr][nc];
+            if (!t) { moves.push({r: nr, c: nc, type: 'empty'}); return true; }
+            if (t.color !== p.color) { moves.push({r: nr, c: nc, type: 'capture'}); return false; }
+            return false;
+        };
+        if (p.type === 'R') [[0,1],[0,-1],[1,0],[-1,0]].forEach(d => { for(let i=1; i<4; i++) if(!addIfPossible(r+d[0]*i, c+d[1]*i)) break; });
+        else if (p.type === 'B') [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(d => { for(let i=1; i<4; i++) if(!addIfPossible(r+d[0]*i, c+d[1]*i)) break; });
+        else if (p.type === 'N') [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(d => addIfPossible(r+d[0], c+d[1]));
+        else if (p.type === 'P') {
+            // Pawn moves straight (only to empty squares)
+            const nr = r + p.dir;
+            if (nr >= 0 && nr < 4 && !board[nr][c]) {
+                moves.push({r: nr, c: c, type: 'empty'});
+            }
+            // Pawn captures diagonally
+            [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(([dc, dr]) => {
+                if (dr !== p.dir) return; // Only capture in forward direction
+                const nr = r + dr, nc = c + dc;
+                if (nr >= 0 && nr < 4 && nc >= 0 && nc < 4) {
+                    const target = board[nr][nc];
+                    if (target && target.color !== p.color) {
+                        moves.push({r: nr, c: nc, type: 'capture'});
+                    }
+                }
+            });
+        }
+        return moves;
+    }
+
+    function checkWin(player) {
+        for(let i=0; i<4; i++) {
+            if(board[i].every(c => c?.color === player)) return true;
+            if([0,1,2,3].every(j => board[j][i]?.color === player)) return true;
+        }
+        if([0,1,2,3].every(i => board[i][i]?.color === player)) return true;
+        if([0,1,2,3].every(i => board[i][3-i]?.color === player)) return true;
+        return false;
+    }
+
+    window.startLocalGame = () => { 
+        isOnline = false; 
+        showScreen('game-screen'); 
+        initBoardUI(); 
+        updateUI(); 
+    };
+
+    function initBoardUI() {
+        const size = Math.min(window.innerWidth * 0.9, 500);
+        canvas.width = canvas.height = size; 
+        CELL_SIZE = size / 4;
+        
+        if (isOnline) {
+            document.getElementById('player-identity').innerText = `YOU ARE ${myColor.toUpperCase()}`;
+        } else {
+            document.getElementById('player-identity').innerText = "LOCAL MODE";
+        }
+        
+        updateUI();
+        render();
+    }
+
+    canvas.addEventListener('mousedown', handleBoardInput);
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        handleBoardInput({ clientX: touch.clientX, clientY: touch.clientY });
+    }, { passive: false });
+
+    function handleBoardInput(e) {
+        if (gameOver) return;
+        
+        // Strict turn check for online mode
+        if (isOnline && turn !== myColor) {
+            showToast("Wait for your turn!");
+            return;
+        }
+        
+        const rect = canvas.getBoundingClientRect();
+        const c = Math.floor((e.clientX - rect.left) / CELL_SIZE);
+        const r = Math.floor((e.clientY - rect.top) / CELL_SIZE);
+
+        if (selectedInv) {
+            if (!board[r][c]) {
+                board[r][c] = { type: selectedInv, color: turn, dir: turn === 'white' ? -1 : 1 };
+                const idx = inventories[turn].indexOf(selectedInv);
+                if (idx !== -1) inventories[turn].splice(idx, 1);
+                selectedInv = null;
+                // Check if this completes the placement phase
+                checkPlacementComplete(turn);
+                sounds.move();
+                endTurnSequence();
+            } else {
+                selectedInv = null;
+            }
+        }
+        else if (selectedBoard) {
+            const move = validMoves.find(m => m.r === r && m.c === c);
+            if (move) {
+                const target = board[r][c];
+                if (target) { 
+                    inventories[target.color].push(target.type); 
+                    sounds.capture(); 
+                } else {
+                    sounds.move();
+                }
+                board[r][c] = board[selectedBoard.r][selectedBoard.c];
+                board[selectedBoard.r][selectedBoard.c] = null;
+                
+                if (board[r][c].type === 'P') { 
+                    if (r === 0) board[r][c].dir = 1; 
+                    if (r === 3) board[r][c].dir = -1; 
+                }
+                
+                selectedBoard = null; 
+                validMoves = []; 
+                endTurnSequence();
+            } else if (board[r][c] && board[r][c].color === turn) {
+                selectPiece(r, c);
+            } else { 
+                selectedBoard = null; 
+                validMoves = []; 
+            }
+        }
+        else if (board[r][c] && board[r][c].color === turn) {
+            // Check if player is still in placement phase
+            if (isInPlacementPhase(turn)) {
+                showToast("Place 3 pieces first!");
+                return;
+            }
+            selectPiece(r, c);
+        }
+        
+        render(); 
+        updateUI();
+    }
+
+    function selectPiece(r, c) { 
+        selectedBoard = {r, c}; 
+        validMoves = getValidMoves(r, c); 
+        sounds.select(); 
+    }
+
+    function endTurnSequence() {
+        const currentPlayer = turn;
+        
+        // Check for win BEFORE switching turns
+        if (checkWin(currentPlayer)) {
+            gameOver = true;
+            document.getElementById('winner-text').innerText = `${currentPlayer.toUpperCase()} WINS!`;
+            
+            if (isOnline) {
+                sendGameState(currentPlayer);
+            }
+            
+            sounds.win();
+            if (isOnline) {
+                document.getElementById('rematch-section').style.display = 'block';
+            }
+            showScreen('win-screen');
+            return;
+        }
+        
+        // Switch turns
+        turn = turn === 'white' ? 'black' : 'white';
+        
+        // Send state to opponent
+        if (isOnline) {
+            sendGameState();
+        }
+        
+        updateUI();
+    }
+
+    function updateUI() {
+        const turnTxt = document.getElementById('turn-txt');
+        turnTxt.innerText = turn.toUpperCase() + "'S TURN";
+        turnTxt.className = `turn-display ${turn}-turn`;
+        
+        const turnIndicator = document.getElementById('turn-indicator');
+        const phaseIndicator = document.getElementById('phase-indicator');
+        
+        // Update phase indicator
+        const piecesOnBoard = countPiecesOnBoard(turn);
+        const inPlacement = isInPlacementPhase(turn);
+        const hasInventory = inventories[turn].length > 0;
+        
+        if (inPlacement) {
+            phaseIndicator.className = 'phase-indicator phase-place';
+            phaseIndicator.textContent = `📍 Place pieces (${piecesOnBoard}/3 on board)`;
+        } else if (hasInventory) {
+            phaseIndicator.className = 'phase-indicator phase-move';
+            phaseIndicator.textContent = '♟️ Move or place pieces';
+        } else {
+            phaseIndicator.className = 'phase-indicator phase-move';
+            phaseIndicator.textContent = '♟️ Move your pieces';
+        }
+        
+        if (isOnline) {
+            if (turn === myColor) {
+                turnTxt.classList.add('your-turn');
+                turnIndicator.style.display = 'block';
+                turnIndicator.className = 'turn-indicator my-turn-indicator';
+                turnIndicator.textContent = '✓ Your turn!';
+            } else {
+                turnTxt.classList.remove('your-turn');
+                turnIndicator.style.display = 'block';
+                turnIndicator.className = 'turn-indicator wait-indicator';
+                turnIndicator.textContent = '⏳ Waiting for opponent...';
+            }
+            // Online: show only your inventory
+            document.getElementById('white-inv').style.display = myColor === 'white' ? 'grid' : 'none';
+            document.getElementById('black-inv').style.display = myColor === 'black' ? 'grid' : 'none';
+        } else {
+            turnIndicator.style.display = 'none';
+            // Local: show current player's inventory
+            document.getElementById('white-inv').style.display = turn === 'white' ? 'grid' : 'none';
+            document.getElementById('black-inv').style.display = turn === 'black' ? 'grid' : 'none';
+        }
+        
+        document.querySelectorAll('.inv-item').forEach(item => {
+            const type = item.dataset.type;
+            const player = item.dataset.player;
+            const exists = inventories[player].includes(type);
+            
+            item.classList.toggle('disabled', !exists);
+            item.classList.toggle('selected', selectedInv === type && player === turn);
+        });
+    }
+
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        for(let r = 0; r < 4; r++) {
+            for(let c = 0; c < 4; c++) {
+                ctx.fillStyle = (r + c) % 2 === 0 ? "#5e4533" : "#3d2b1f"; 
+                ctx.fillRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+        }
+        
+        validMoves.forEach(m => {
+            const centerX = m.c * CELL_SIZE + CELL_SIZE / 2;
+            const centerY = m.r * CELL_SIZE + CELL_SIZE / 2;
+            
+            if (m.type === 'capture') {
+                // For capture moves: red ring around the piece
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, CELL_SIZE * 0.42, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(231, 76, 60, 0.9)';
+                ctx.lineWidth = CELL_SIZE * 0.08;
+                ctx.stroke();
+                
+                // Inner subtle fill
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, CELL_SIZE * 0.38, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(231, 76, 60, 0.2)';
+                ctx.fill();
+            } else {
+                // For empty moves: small dot in center
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, CELL_SIZE * 0.15, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.fill();
+                
+                // Subtle outer ring
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, CELL_SIZE * 0.15, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        });
+        
+        if (selectedBoard) { 
+            ctx.strokeStyle = "rgba(212, 163, 115, 0.8)"; 
+            ctx.lineWidth = 6; 
+            ctx.strokeRect(selectedBoard.c * CELL_SIZE, selectedBoard.r * CELL_SIZE, CELL_SIZE, CELL_SIZE); 
+        }
+        
+        ctx.textAlign = 'center'; 
+        ctx.textBaseline = 'middle'; 
+        ctx.font = `${CELL_SIZE * 0.7}px "Segoe UI Symbol"`;
+        
+        for(let r = 0; r < 4; r++) {
+            for(let c = 0; c < 4; c++) {
+                const p = board[r][c]; 
+                if (!p) continue;
+                
+                ctx.fillStyle = p.color === 'white' ? "#fff" : "#111";
+                if (p.color === 'black') {
+                    ctx.strokeStyle = "#888"; 
+                    ctx.lineWidth = 1; 
+                    ctx.strokeText(PIECE_CHARS[p.color][p.type], c * CELL_SIZE + CELL_SIZE / 2, r * CELL_SIZE + CELL_SIZE / 2);
+                }
+                ctx.fillText(PIECE_CHARS[p.color][p.type], c * CELL_SIZE + CELL_SIZE / 2, r * CELL_SIZE + CELL_SIZE / 2);
+            }
+        }
+    }
+
+    document.querySelectorAll('.inv-item').forEach(item => {
+        item.addEventListener('click', () => {
+            if (gameOver) return;
+            
+            // Strict turn check for online mode
+            if (isOnline && turn !== myColor) {
+                showToast("Wait for your turn!");
+                return;
+            }
+            
+            const type = item.dataset.type;
+            const player = item.dataset.player;
+            
+            if (player === turn && inventories[player].includes(type)) {
+                selectedInv = type; 
+                selectedBoard = null; 
+                validMoves = []; 
+                sounds.select(); 
+                updateUI(); 
+                render();
+            }
+        });
+    });
+
+    // Handle enter key in join input
+    document.getElementById('join-code-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            joinRoom();
+        }
+    });
+
+    // Handle window resize for responsive canvas
+    window.addEventListener('resize', () => {
+        if (!document.getElementById('game-screen').classList.contains('hidden')) {
+            const size = Math.min(window.innerWidth * 0.9, window.innerHeight * 0.5, 500);
+            canvas.width = canvas.height = size;
+            CELL_SIZE = size / 4;
+            render();
+        }
+    });
+
+    // Prevent double-tap zoom on mobile
+    document.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, false);
+    let lastTouchEnd = 0;
+</script>
+</body>
+</html>
