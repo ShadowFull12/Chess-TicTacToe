@@ -1,8 +1,9 @@
 # ♟️ Chess Tic-Tac-Toe
 
-A unique hybrid game combining the strategic movement of Chess pieces with the winning objective of Tic-Tac-Toe! Play online with friends using peer-to-peer multiplayer.
+A unique hybrid game combining the strategic movement of Chess pieces with the winning objective of Tic-Tac-Toe! Play against a challenging AI or online with friends using peer-to-peer multiplayer.
 
 ![Game Preview](https://img.shields.io/badge/Game-Online%20Multiplayer-brightgreen)
+![AI Mode](https://img.shields.io/badge/AI-Minimax%20Engine-purple)
 ![Made With](https://img.shields.io/badge/Made%20With-HTML%2FCSS%2FJS-blue)
 ![PeerJS](https://img.shields.io/badge/P2P-PeerJS-orange)
 
@@ -13,7 +14,7 @@ A unique hybrid game combining the strategic movement of Chess pieces with the w
 ## 🎯 How to Play
 
 ### Objective
-Get **3 of your pieces in a row** (horizontally, vertically, or diagonally) on the 4x4 board to win!
+Get **4 of your pieces in a row** (horizontally, vertically, or diagonally) on the 4x4 board to win!
 
 ### Game Rules
 
@@ -29,19 +30,32 @@ Get **3 of your pieces in a row** (horizontally, vertically, or diagonally) on t
 4. **Capturing**: Land on an opponent's piece to capture it (returns to their inventory)
 5. **Win Condition**: First player to align 3 pieces in a row wins!
 
-## 🌐 Online Multiplayer
+## 🌐 Game Modes
 
-### Creating a Game
+### 🤖 Play vs AI
+- Challenge a **smart AI opponent** powered by Minimax algorithm with alpha-beta pruning
+- AI evaluates board positions, threats, mobility, and potential wins
+- You start as White, colors swap on each rematch
+- Perfect for practice and single-player fun!
+
+### 👥 Online Multiplayer
+
+#### Creating a Game
 1. Click **"Create Room"**
 2. Share the **6-character Room Code** with your friend
 3. Wait for them to join
 
-### Joining a Game
+#### Joining a Game
 1. Enter your friend's **Room Code**
 2. Click **"Join Room"**
 3. Start playing!
 
+### 🏠 Local Multiplayer
+- Play with a friend on the same device
+- Take turns on the same screen
+
 ### Features
+- 🤖 **Smart AI**: Minimax algorithm with alpha-beta pruning for challenging gameplay
 - 🎲 **Random Color Assignment**: Colors are randomly assigned at game start
 - 🔄 **Color Swap on Rematch**: Colors alternate each rematch
 - 📱 **Mobile Friendly**: Fully responsive design works on phones and tablets

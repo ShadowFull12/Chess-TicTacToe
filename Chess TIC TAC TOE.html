@@ -344,6 +344,7 @@
         <div class="menu-card">
             <h2>Select Game Mode</h2>
             <div class="menu-btns">
+                <button onclick="startAIGame()">🤖 Play vs AI</button>
                 <button onclick="startLocalGame()">Local Multiplayer</button>
                 <button onclick="createRoom()">Create Room</button>
                 <button onclick="showScreen('join-screen')">Join Room</button>
@@ -426,7 +427,7 @@
         <div class="menu-card">
             <h1 id="winner-text">WHITE WINS!</h1>
             <div id="rematch-section" style="display:none;">
-                <button id="rematch-btn" onclick="requestRematch()">🔄 Rematch</button>
+                <button id="rematch-btn" onclick="handleRematchClick()">🔄 Rematch</button>
                 <p id="rematch-status" class="waiting-text" style="display:none;"></p>
             </div>
             <button onclick="leaveGame()" style="margin-top:10px; background:#444; color:white;">Back to Menu</button>
@@ -456,6 +457,9 @@
     let myColor = 'white';
     let roomCode = '';
     let rematchRequested = { me: false, opponent: false };
+    let isAIGame = false;
+    let aiColor = 'black';
+    let aiThinking = false;
 
     function generateRoomCode() {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -671,6 +675,14 @@
         });
     }
 
+    window.handleRematchClick = () => {
+        if (isAIGame) {
+            aiRematch();
+        } else {
+            requestRematch();
+        }
+    };
+
     window.requestRematch = () => {
         document.getElementById('rematch-btn').disabled = true;
         document.getElementById('rematch-btn').innerText = '⏳ Waiting...';
@@ -871,10 +883,21 @@
     }
 
     window.startLocalGame = () => { 
-        isOnline = false; 
+        isOnline = false;
+        isAIGame = false;
         showScreen('game-screen'); 
         initBoardUI(); 
         updateUI(); 
+    };
+
+    window.startAIGame = () => {
+        isOnline = false;
+        isAIGame = true;
+        myColor = 'white';
+        aiColor = 'black';
+        showScreen('game-screen');
+        initBoardUI();
+        updateUI();
     };
 
     function initBoardUI() {
@@ -884,6 +907,8 @@
         
         if (isOnline) {
             document.getElementById('player-identity').innerText = `YOU ARE ${myColor.toUpperCase()}`;
+        } else if (isAIGame) {
+            document.getElementById('player-identity').innerText = `YOU ARE ${myColor.toUpperCase()} vs 🤖 AI`;
         } else {
             document.getElementById('player-identity').innerText = "LOCAL MODE";
         }
@@ -905,6 +930,12 @@
         // Strict turn check for online mode
         if (isOnline && turn !== myColor) {
             showToast("Wait for your turn!");
+            return;
+        }
+        
+        // Block input during AI turn
+        if (isAIGame && turn === aiColor) {
+            showToast("Wait for AI!");
             return;
         }
         
@@ -979,7 +1010,16 @@
         // Check for win BEFORE switching turns
         if (checkWin(currentPlayer)) {
             gameOver = true;
-            document.getElementById('winner-text').innerText = `${currentPlayer.toUpperCase()} WINS!`;
+            if (isAIGame) {
+                if (currentPlayer === myColor) {
+                    document.getElementById('winner-text').innerText = '🎉 YOU WIN!';
+                } else {
+                    document.getElementById('winner-text').innerText = '🤖 AI WINS!';
+                }
+                document.getElementById('rematch-section').style.display = 'block';
+            } else {
+                document.getElementById('winner-text').innerText = `${currentPlayer.toUpperCase()} WINS!`;
+            }
             
             if (isOnline) {
                 sendGameState(currentPlayer);
@@ -1002,15 +1042,39 @@
         }
         
         updateUI();
+        
+        // Trigger AI move if it's AI's turn
+        if (isAIGame && turn === aiColor && !gameOver) {
+            setTimeout(() => makeAIMove(), 600);
+        }
     }
 
     function updateUI() {
         const turnTxt = document.getElementById('turn-txt');
-        turnTxt.innerText = turn.toUpperCase() + "'S TURN";
-        turnTxt.className = `turn-display ${turn}-turn`;
-        
         const turnIndicator = document.getElementById('turn-indicator');
         const phaseIndicator = document.getElementById('phase-indicator');
+        
+        if (isAIGame) {
+            if (turn === myColor) {
+                turnTxt.innerText = "YOUR TURN";
+                turnTxt.className = `turn-display ${turn}-turn your-turn`;
+                turnIndicator.style.display = 'block';
+                turnIndicator.className = 'turn-indicator my-turn-indicator';
+                turnIndicator.textContent = '✓ Your turn!';
+            } else {
+                turnTxt.innerText = "🤖 AI THINKING...";
+                turnTxt.className = `turn-display ${turn}-turn`;
+                turnIndicator.style.display = 'block';
+                turnIndicator.className = 'turn-indicator wait-indicator';
+                turnIndicator.textContent = '⏳ AI is thinking...';
+            }
+            // AI mode: show only your inventory
+            document.getElementById('white-inv').style.display = myColor === 'white' ? 'grid' : 'none';
+            document.getElementById('black-inv').style.display = myColor === 'black' ? 'grid' : 'none';
+        } else {
+            turnTxt.innerText = turn.toUpperCase() + "'S TURN";
+            turnTxt.className = `turn-display ${turn}-turn`;
+        }
         
         // Update phase indicator
         const piecesOnBoard = countPiecesOnBoard(turn);
@@ -1043,7 +1107,7 @@
             // Online: show only your inventory
             document.getElementById('white-inv').style.display = myColor === 'white' ? 'grid' : 'none';
             document.getElementById('black-inv').style.display = myColor === 'black' ? 'grid' : 'none';
-        } else {
+        } else if (!isAIGame) {
             turnIndicator.style.display = 'none';
             // Local: show current player's inventory
             document.getElementById('white-inv').style.display = turn === 'white' ? 'grid' : 'none';
@@ -1142,6 +1206,12 @@
             const type = item.dataset.type;
             const player = item.dataset.player;
             
+            // Block inventory clicks during AI turn
+            if (isAIGame && turn === aiColor) {
+                showToast("Wait for AI!");
+                return;
+            }
+            
             if (player === turn && inventories[player].includes(type)) {
                 selectedInv = type; 
                 selectedBoard = null; 
@@ -1179,6 +1249,299 @@
         lastTouchEnd = now;
     }, false);
     let lastTouchEnd = 0;
+
+    /** --- AI ENGINE (MINIMAX WITH ALPHA-BETA PRUNING) --- **/
+    
+    function makeAIMove() {
+        if (gameOver || turn !== aiColor) return;
+        
+        aiThinking = true;
+        updateUI();
+        
+        const bestMove = findBestMove();
+        
+        if (bestMove) {
+            executeAIMove(bestMove);
+        }
+        
+        aiThinking = false;
+    }
+    
+    function findBestMove() {
+        const moves = getAllPossibleMoves(aiColor);
+        if (moves.length === 0) return null;
+        
+        let bestScore = -Infinity;
+        let bestMove = null;
+        
+        for (const move of moves) {
+            const savedState = saveGameState();
+            applyMove(move, aiColor);
+            const score = minimax(4, -Infinity, Infinity, false);
+            restoreGameState(savedState);
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = move;
+            }
+        }
+        
+        return bestMove;
+    }
+    
+    function minimax(depth, alpha, beta, isMaximizing) {
+        const aiWins = checkWin(aiColor);
+        const playerWins = checkWin(myColor);
+        
+        if (aiWins) return 1000 + depth;
+        if (playerWins) return -1000 - depth;
+        if (depth === 0) return evaluateBoard();
+        
+        const currentPlayer = isMaximizing ? aiColor : myColor;
+        const moves = getAllPossibleMoves(currentPlayer);
+        
+        if (moves.length === 0) return evaluateBoard();
+        
+        if (isMaximizing) {
+            let maxScore = -Infinity;
+            for (const move of moves) {
+                const savedState = saveGameState();
+                applyMove(move, currentPlayer);
+                const score = minimax(depth - 1, alpha, beta, false);
+                restoreGameState(savedState);
+                maxScore = Math.max(maxScore, score);
+                alpha = Math.max(alpha, score);
+                if (beta <= alpha) break;
+            }
+            return maxScore;
+        } else {
+            let minScore = Infinity;
+            for (const move of moves) {
+                const savedState = saveGameState();
+                applyMove(move, currentPlayer);
+                const score = minimax(depth - 1, alpha, beta, true);
+                restoreGameState(savedState);
+                minScore = Math.min(minScore, score);
+                beta = Math.min(beta, score);
+                if (beta <= alpha) break;
+            }
+            return minScore;
+        }
+    }
+    
+    function evaluateBoard() {
+        let score = 0;
+        const opponent = myColor;
+        
+        // Evaluate lines (rows, cols, diagonals)
+        score += evaluateLines(aiColor, opponent);
+        
+        // Center control bonus
+        const centerPositions = [[1,1], [1,2], [2,1], [2,2]];
+        for (const [r, c] of centerPositions) {
+            if (board[r][c]?.color === aiColor) score += 15;
+            if (board[r][c]?.color === opponent) score -= 15;
+        }
+        
+        // Piece mobility bonus
+        score += countMobility(aiColor) * 3;
+        score -= countMobility(opponent) * 3;
+        
+        // Material advantage
+        score += (4 - inventories[aiColor].length) * 5;
+        score -= (4 - inventories[opponent].length) * 5;
+        
+        // Threaten opponent pieces
+        score += countThreats(aiColor, opponent) * 10;
+        score -= countThreats(opponent, aiColor) * 10;
+        
+        return score;
+    }
+    
+    function evaluateLines(player, opponent) {
+        let score = 0;
+        const lines = [];
+        
+        // Rows and columns
+        for (let i = 0; i < 4; i++) {
+            lines.push([[i,0], [i,1], [i,2], [i,3]]);
+            lines.push([[0,i], [1,i], [2,i], [3,i]]);
+        }
+        // Diagonals
+        lines.push([[0,0], [1,1], [2,2], [3,3]]);
+        lines.push([[0,3], [1,2], [2,1], [3,0]]);
+        
+        for (const line of lines) {
+            let playerCount = 0;
+            let opponentCount = 0;
+            let emptyCount = 0;
+            
+            for (const [r, c] of line) {
+                if (board[r][c]?.color === player) playerCount++;
+                else if (board[r][c]?.color === opponent) opponentCount++;
+                else emptyCount++;
+            }
+            
+            // Score for potential wins
+            if (opponentCount === 0) {
+                if (playerCount === 3) score += 100;
+                else if (playerCount === 2) score += 25;
+                else if (playerCount === 1) score += 5;
+            }
+            
+            // Block opponent's potential wins
+            if (playerCount === 0) {
+                if (opponentCount === 3) score -= 150; // Very important to block!
+                else if (opponentCount === 2) score -= 30;
+                else if (opponentCount === 1) score -= 5;
+            }
+        }
+        
+        return score;
+    }
+    
+    function countMobility(player) {
+        let mobility = 0;
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                if (board[r][c]?.color === player) {
+                    mobility += getValidMoves(r, c).length;
+                }
+            }
+        }
+        return mobility;
+    }
+    
+    function countThreats(attacker, defender) {
+        let threats = 0;
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                if (board[r][c]?.color === attacker) {
+                    const moves = getValidMoves(r, c);
+                    for (const move of moves) {
+                        if (move.type === 'capture') threats++;
+                    }
+                }
+            }
+        }
+        return threats;
+    }
+    
+    function getAllPossibleMoves(player) {
+        const moves = [];
+        const inPlacement = isInPlacementPhase(player);
+        const hasInventory = inventories[player].length > 0;
+        
+        // Placement moves
+        if (hasInventory && (inPlacement || !inPlacement)) {
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (!board[r][c]) {
+                        for (const pieceType of inventories[player]) {
+                            moves.push({
+                                type: 'place',
+                                pieceType: pieceType,
+                                to: { r, c }
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Movement moves (only if placement complete)
+        if (!inPlacement) {
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (board[r][c]?.color === player) {
+                        const validMoves = getValidMoves(r, c);
+                        for (const vm of validMoves) {
+                            moves.push({
+                                type: 'move',
+                                from: { r, c },
+                                to: { r: vm.r, c: vm.c },
+                                isCapture: vm.type === 'capture'
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
+        return moves;
+    }
+    
+    function applyMove(move, player) {
+        if (move.type === 'place') {
+            const dir = player === 'white' ? -1 : 1;
+            board[move.to.r][move.to.c] = { type: move.pieceType, color: player, dir: dir };
+            const idx = inventories[player].indexOf(move.pieceType);
+            if (idx !== -1) inventories[player].splice(idx, 1);
+            checkPlacementComplete(player);
+        } else if (move.type === 'move') {
+            const target = board[move.to.r][move.to.c];
+            if (target) {
+                inventories[target.color].push(target.type);
+            }
+            board[move.to.r][move.to.c] = board[move.from.r][move.from.c];
+            board[move.from.r][move.from.c] = null;
+            
+            // Handle pawn direction reversal
+            const piece = board[move.to.r][move.to.c];
+            if (piece.type === 'P') {
+                if (move.to.r === 0) piece.dir = 1;
+                if (move.to.r === 3) piece.dir = -1;
+            }
+        }
+    }
+    
+    function saveGameState() {
+        return {
+            board: board.map(row => row.map(cell => cell ? {...cell} : null)),
+            inventories: {
+                white: [...inventories.white],
+                black: [...inventories.black]
+            },
+            placementComplete: { ...placementComplete }
+        };
+    }
+    
+    function restoreGameState(state) {
+        board = state.board;
+        inventories = state.inventories;
+        placementComplete = state.placementComplete;
+    }
+    
+    function executeAIMove(move) {
+        if (move.type === 'place') {
+            const dir = aiColor === 'white' ? -1 : 1;
+            board[move.to.r][move.to.c] = { type: move.pieceType, color: aiColor, dir: dir };
+            const idx = inventories[aiColor].indexOf(move.pieceType);
+            if (idx !== -1) inventories[aiColor].splice(idx, 1);
+            checkPlacementComplete(aiColor);
+            sounds.move();
+        } else if (move.type === 'move') {
+            const target = board[move.to.r][move.to.c];
+            if (target) {
+                inventories[target.color].push(target.type);
+                sounds.capture();
+            } else {
+                sounds.move();
+            }
+            board[move.to.r][move.to.c] = board[move.from.r][move.from.c];
+            board[move.from.r][move.from.c] = null;
+            
+            // Handle pawn direction reversal
+            const piece = board[move.to.r][move.to.c];
+            if (piece.type === 'P') {
+                if (move.to.r === 0) piece.dir = 1;
+                if (move.to.r === 3) piece.dir = -1;
+            }
+        }
+        
+        render();
+        endTurnSequence();
+    }
 </script>
 </body>
 </html>
