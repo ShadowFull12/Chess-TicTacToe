@@ -967,48 +967,61 @@
         // Reference to matchmaking queue
         matchmakingRef = database.ref('matchmaking');
         
-        // Add myself to the queue
-        myQueueRef = matchmakingRef.push();
-        await myQueueRef.set({
-            oderId: myQueueRef.key,
-            playerName: currentUser.displayName || 'Player',
-            oderId: currentUser.uid,
-            matchCode: myMatchCode,
-            timestamp: firebase.database.ServerValue.TIMESTAMP,
-            status: 'waiting'
-        });
+        try {
+            // Add myself to the queue
+            myQueueRef = matchmakingRef.push();
+            await myQueueRef.set({
+                oderId: myQueueRef.key,
+                playerName: currentUser.displayName || 'Player',
+                playerId: currentUser.uid,
+                matchCode: myMatchCode,
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                status: 'waiting'
+            });
+            console.log('Added to matchmaking queue:', myQueueRef.key);
 
-        // Remove from queue when disconnected
-        myQueueRef.onDisconnect().remove();
+            // Remove from queue when disconnected
+            myQueueRef.onDisconnect().remove();
 
-        // Listen for queue changes
-        matchmakingRef.on('value', (snapshot) => {
-            const queue = snapshot.val();
-            if (!queue || !isInQueue) return;
+            // Listen for queue changes
+            matchmakingRef.on('value', (snapshot) => {
+                const queue = snapshot.val();
+                console.log('Queue update:', queue);
+                if (!queue || !isInQueue) return;
 
-            const players = Object.entries(queue);
-            const waitingPlayers = players.filter(([key, p]) => p.status === 'waiting');
-            
-            // Update queue count
-            document.getElementById('queue-count').textContent = 
-                `Players in queue: ${waitingPlayers.length}`;
-
-            // Find a match (first player in queue that isn't me)
-            for (const [key, player] of waitingPlayers) {
-                if (key !== myQueueRef.key && player.status === 'waiting') {
-                    // Found a match! Lower timestamp becomes host
-                    const myEntry = queue[myQueueRef.key];
-                    if (myEntry && myEntry.timestamp < player.timestamp) {
-                        // I'm the host
-                        initiateMatch(player.matchCode, true);
-                    } else {
-                        // I'm the joiner
-                        initiateMatch(myEntry.matchCode, false);
-                    }
-                    break;
+                const players = Object.entries(queue);
+                const waitingPlayers = players.filter(([key, p]) => p.status === 'waiting');
+                
+                // Update queue count
+                const queueCountEl = document.getElementById('queue-count');
+                if (queueCountEl) {
+                    queueCountEl.textContent = `Players in queue: ${waitingPlayers.length}`;
                 }
-            }
-        });
+
+                // Find a match (first player in queue that isn't me)
+                for (const [key, player] of waitingPlayers) {
+                    if (key !== myQueueRef.key && player.status === 'waiting') {
+                        // Found a match! Lower timestamp becomes host
+                        const myEntry = queue[myQueueRef.key];
+                        if (myEntry && myEntry.timestamp < player.timestamp) {
+                            // I'm the host
+                            console.log('Match found! I am host');
+                            initiateMatch(player.matchCode, true);
+                        } else {
+                            // I'm the joiner
+                            console.log('Match found! I am joiner');
+                            initiateMatch(myEntry.matchCode, false);
+                        }
+                        break;
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('Matchmaking error:', e);
+            showToast('Matchmaking error: ' + e.message);
+            isInQueue = false;
+            showScreen('online-screen');
+        }
     };
 
     async function initiateMatch(matchCode, amHost) {
@@ -1068,9 +1081,23 @@
     }
 
     window.cancelMatchmaking = async () => {
+        console.log('Cancelling matchmaking...');
         isInQueue = false;
-        if (matchmakingRef) matchmakingRef.off();
-        if (myQueueRef) await myQueueRef.remove();
+        
+        try {
+            if (matchmakingRef) {
+                matchmakingRef.off();
+                matchmakingRef = null;
+            }
+            if (myQueueRef) {
+                await myQueueRef.remove();
+                myQueueRef = null;
+            }
+            console.log('Matchmaking cancelled');
+        } catch (e) {
+            console.error('Error cancelling matchmaking:', e);
+        }
+        
         showScreen('online-screen');
     };
 
