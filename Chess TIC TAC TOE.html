@@ -1312,7 +1312,15 @@
 
         if (selectedInv) {
             if (!board[r][c]) {
-                board[r][c] = { type: selectedInv, color: turn, dir: turn === 'white' ? -1 : 1 };
+                let pieceDir = turn === 'white' ? -1 : 1;
+                
+                // If placing a pawn on an edge, force reverse direction
+                if (selectedInv === 'P') {
+                    if (r === 0) pieceDir = 1;  // Top edge - must go down
+                    if (r === 3) pieceDir = -1; // Bottom edge - must go up
+                }
+                
+                board[r][c] = { type: selectedInv, color: turn, dir: pieceDir };
                 const idx = inventories[turn].indexOf(selectedInv);
                 if (idx !== -1) inventories[turn].splice(idx, 1);
                 selectedInv = null;
@@ -2275,7 +2283,14 @@
     
     function applyMove(move, player) {
         if (move.type === 'place') {
-            const dir = player === 'white' ? -1 : 1;
+            let dir = player === 'white' ? -1 : 1;
+            
+            // If placing a pawn on an edge, force reverse direction
+            if (move.pieceType === 'P') {
+                if (move.to.r === 0) dir = 1;  // Top edge - must go down
+                if (move.to.r === 3) dir = -1; // Bottom edge - must go up
+            }
+            
             board[move.to.r][move.to.c] = { type: move.pieceType, color: player, dir: dir };
             const idx = inventories[player].indexOf(move.pieceType);
             if (idx !== -1) inventories[player].splice(idx, 1);
@@ -2316,7 +2331,14 @@
     
     function executeAIMove(move) {
         if (move.type === 'place') {
-            const dir = aiColor === 'white' ? -1 : 1;
+            let dir = aiColor === 'white' ? -1 : 1;
+            
+            // If placing a pawn on an edge, force reverse direction
+            if (move.pieceType === 'P') {
+                if (move.to.r === 0) dir = 1;  // Top edge - must go down
+                if (move.to.r === 3) dir = -1; // Bottom edge - must go up
+            }
+            
             board[move.to.r][move.to.c] = { type: move.pieceType, color: aiColor, dir: dir };
             const idx = inventories[aiColor].indexOf(move.pieceType);
             if (idx !== -1) inventories[aiColor].splice(idx, 1);
