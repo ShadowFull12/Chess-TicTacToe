@@ -718,11 +718,11 @@
         <div class="menu-card">
             <h2>🎯 Finding Match...</h2>
             <div class="matchmaking-status">
-                <span class="spinner"></span>
+                <div class="spinner"></div>
                 <p>Searching for opponent...</p>
                 <p id="queue-count" class="queue-count">Players in queue: 0</p>
             </div>
-            <button onclick="cancelMatchmaking()" style="background:#e74c3c; color:white; margin-top: 15px;">Cancel</button>
+            <button id="cancel-matchmaking-btn" style="background:#e74c3c; color:white; margin-top: 15px;">Cancel</button>
         </div>
     </div>
 
@@ -2731,6 +2731,12 @@
         render();
         endTurnSequence();
     }
+
+    // Attach event listener after DOM is ready
+    document.getElementById('cancel-matchmaking-btn').addEventListener('click', function() {
+        console.log('Cancel button clicked');
+        cancelMatchmaking();
+    });
 </script>
 </body>
 </html>
