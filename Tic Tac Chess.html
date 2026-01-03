@@ -839,15 +839,14 @@
 
 <script>
     /** --- FIREBASE CONFIG --- **/
-    // TODO: Replace with your own Firebase config from Firebase Console
     const firebaseConfig = {
-        apiKey: "YOUR_API_KEY",
-        authDomain: "YOUR_PROJECT.firebaseapp.com",
-        databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-        projectId: "YOUR_PROJECT",
-        storageBucket: "YOUR_PROJECT.appspot.com",
-        messagingSenderId: "YOUR_SENDER_ID",
-        appId: "YOUR_APP_ID"
+        apiKey: "AIzaSyCvLnYapVM6R2GBNGk4SeoiruAEIcuP_Wc",
+        authDomain: "tic-tac-chess-72bde.firebaseapp.com",
+        databaseURL: "https://tic-tac-chess-72bde-default-rtdb.firebaseio.com",
+        projectId: "tic-tac-chess-72bde",
+        storageBucket: "tic-tac-chess-72bde.firebasestorage.app",
+        messagingSenderId: "174301311466",
+        appId: "1:174301311466:web:a2a4cfdf9883b1d2128293"
     };
 
     // Initialize Firebase
@@ -972,7 +971,7 @@
         myQueueRef = matchmakingRef.push();
         await myQueueRef.set({
             oderId: myQueueRef.key,
-            odername: currentUser.displayName || 'Player',
+            playerName: currentUser.displayName || 'Player',
             oderId: currentUser.uid,
             matchCode: myMatchCode,
             timestamp: firebase.database.ServerValue.TIMESTAMP,
